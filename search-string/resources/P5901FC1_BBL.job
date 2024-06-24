@@ -1,0 +1,246 @@
+#!/bin/csh
+# Job Procedure P5901FC1.job
+# Generated Fri Apr 16 2018
+#
+
+echo ===========================================================================
+echo STEP00 - SET DATE
+echo ===========================================================================
+setenv DATEYYMD `cat $banktrade/BBL/FILE/CURDT.dat`
+
+echo Session Date `echo $DATEYYMD | gawk '{print substr($0,9,8)}'`
+setenv YY `echo $DATEYYMD | gawk '{print substr($0,11,2)}'`
+setenv MM `echo $DATEYYMD | gawk '{print substr($0,13,2)}'`
+setenv DD `echo $DATEYYMD | gawk '{print substr($0,15,2)}'`
+setenv SDATE "$DD$MM$YY"
+
+echo Previous Date `echo $DATEYYMD | gawk '{print substr($0,1,8)}'`
+setenv PY `echo $DATEYYMD | gawk '{print substr($0,03,2)}'`
+setenv PM `echo $DATEYYMD | gawk '{print substr($0,05,2)}'`
+setenv PD `echo $DATEYYMD | gawk '{print substr($0,07,2)}'`
+setenv PDATE "$PD$PM$PY"
+
+#echo ===========================================================================
+#echo STEP0B AND STEP0C - SORT BLFACOUT INTO INDEXED FILE
+#echo ===========================================================================
+#setenv INFILE  $banktrade/BBL/FILE/TF_TF_D"$SDATE"_BKP_FACOUT_BEF.txt
+#setenv OUTFILE $banktrade/BBL/FILE/TF_TF_BLFACOUT
+#setenv PARMIN  $banktrade/BBL/CCARD/CC1FC204.txt
+#gcsort take $PARMIN
+
+echo ===========================================================================
+echo STEP0A - DELETE RECORDS IN LCOUTS
+echo ===========================================================================
+runbw PT12441
+setenv JOBSTATUS $status
+if ($JOBSTATUS <<>> 0) then
+  echo "ERROR STEP0A - DELETE RECORDS IN LCOUTS"
+  goto ERROR
+endif
+
+echo ===========================================================================
+echo STEP0B AND STEP0C - INSERT RECORDS IN LCOUTS
+echo ===========================================================================
+setenv LCOUTS  $banktrade/BBL/FILE/TF_TF_D"$SDATE"_BKP_FACOUT_BEF.txt
+runbw PT12442
+if ($JOBSTATUS <<>> 0) then
+  echo "ERROR STEP0B AND STEP0C - INSERT RECORDS IN LCOUTS"
+  goto ERROR
+endif
+
+echo ===========================================================================
+echo STEP01 - SORT LCGLGX
+echo ===========================================================================
+#***** include specific gl account num *****
+#***** sort by gl account num and gl transaction amount *****
+setenv INFILE  $banktrade/BBL/FILE/TF_TF_D"$SDATE"_LCU_LCGLGX.txt
+setenv OUTFILE $banktrade/BBL/TEMP/TEMPFILE/P5901FC1_LCGLGX.txt
+setenv PARMIN  $banktrade/BBL/CCARD/CC1FC101.txt
+gcsort take $PARMIN
+setenv JOBSTATUS $status
+if ($JOBSTATUS <<>> 0) then
+  echo "ERROR STEP01 - SORT LCGLGX"
+  goto ERROR
+endif
+
+echo ===========================================================================
+echo STEP03 - COPY FILE
+echo ===========================================================================
+cp  $banktrade/BBL/TEMP/TEMPFILE/P5901FC1_LCGLGX.txt   $banktrade/BBL/FILE/TF_TF_D"$SDATE"_FAC_GLGX.txt
+
+echo ===========================================================================
+echo STEP04 - EXECUTE PROGRAM PT04030
+echo ===========================================================================
+setenv BTDATE   $banktrade/BBL/FILE/CURDT.dat
+setenv GLGX     $banktrade/BBL/FILE/TF_TF_D"$SDATE"_FAC_GLGX.txt
+#setenv BLFACOUT $banktrade/BBL/FILE/TF_TF_BLFACOUT
+setenv BLBFT0   $banktrade/BBL/FILE/TF_TF_D"$SDATE"_FAC_BLBFT0.txt
+setenv BLTRNT1  $banktrade/BBL/FILE/TF_TF_D"$SDATE"_FAC_BLTRNT1.txt
+setenv GENERR   $banktrade/BBL/TEMP/TEMPFILE/P5901FC1_GENERR.txt
+runbw PT04030
+setenv JOBSTATUS $status
+if ($JOBSTATUS <<>> 0) then
+  echo "ERROR STEP STEP04"
+  goto ERROR
+endif
+
+echo ===========================================================================
+echo STEP05 - SORT GENERR
+echo ===========================================================================
+#***** sort by location and voucher no and seq *****
+setenv INFILE  $banktrade/BBL/TEMP/TEMPFILE/P5901FC1_GENERR.txt
+setenv OUTFILE $banktrade/BBL/TEMP/TEMPFILE/P5901FC1_ERR.txt
+setenv PARMIN  $banktrade/BBL/CCARD/CC1FC103.txt
+gcsort take $PARMIN
+setenv JOBSTATUS $status
+if ($JOBSTATUS <<>> 0) then
+  echo "ERROR STEP05 - SORT GENERR"
+  goto ERROR
+endif
+
+echo ===========================================================================
+echo STEP06 - EXECUTE PROGRAM PT04960
+echo ===========================================================================
+setenv BTDATE  $banktrade/BBL/FILE/CURDT.dat
+setenv GENERR  $banktrade/BBL/TEMP/TEMPFILE/P5901FC1_ERR.txt
+setenv PRINT01 $banktrade/BBL/REPORT/P5901FC1_S001_D"$SDATE".txt
+runbw PT04960
+setenv JOBSTATUS $status
+if ($JOBSTATUS <<>> 0) then
+  echo "ERROR STEP STEP06"
+  goto ERROR
+endif
+
+echo ===========================================================================
+echo STEP07 - MERGE FILES
+echo ===========================================================================
+setenv INFILE1 $banktrade/BBL/FILE/TF_TF_D"$PDATE"_FAC_BLFACBF.txt
+setenv INFILE2 $banktrade/BBL/FILE/TF_TF_D"$SDATE"_FAC_BLBFT0.txt
+setenv INFILE3 $banktrade/BBL/FILE/TF_TF_D"$SDATE"_FAC_BLTRNT1.txt
+setenv OUTFILE $banktrade/BBL/TEMP/TEMPFILE/P5901FC1_SUB.txt
+cat $INFILE1 $INFILE2 $INFILE3 > $OUTFILE
+
+echo ===========================================================================
+echo STEP08 - SORT SUB
+echo ===========================================================================
+setenv INFILE  $banktrade/BBL/TEMP/TEMPFILE/P5901FC1_SUB.txt
+setenv OUTFILE $banktrade/BBL/FILE/TF_TF_D"$SDATE"_FAC_SUBBK.txt
+setenv PARMIN  $banktrade/BBL/CCARD/CC1FC104.txt
+gcsort take $PARMIN
+setenv JOBSTATUS $status
+if ($JOBSTATUS <<>> 0) then
+  echo "ERROR STEP08 - SORT SUB"
+  goto ERROR
+endif
+
+echo ===========================================================================
+echo STEP09 - EXECUTE PROGRAM PT04040
+echo ===========================================================================
+setenv BTDATE  $banktrade/BBL/FILE/CURDT.dat
+setenv SUBBK   $banktrade/BBL/FILE/TF_TF_D"$SDATE"_FAC_SUBBK.txt
+#setenv FACVS   $banktrade/BBL/FILE/TF_TF_BLFACOUT
+setenv BLFACBF $banktrade/BBL/FILE/TF_TF_D"$SDATE"_FAC_BLFACBF.txt
+setenv BLFACSB $banktrade/BBL/TEMP/TEMPFILE/P5901FC1_BLFACSB.txt
+runbw PT04040
+setenv JOBSTATUS $status
+if ($JOBSTATUS <<>> 0) then
+  echo "ERROR STEP STEP09"
+  goto ERROR
+endif
+
+echo ===========================================================================
+echo STEP10 - SORT BLFACSB
+echo ===========================================================================
+setenv INFILE  $banktrade/BBL/TEMP/TEMPFILE/P5901FC1_BLFACSB.txt
+setenv OUTFILE $banktrade/BBL/FILE/TF_TF_D"$SDATE"_FAC_BLFACSB.txt
+setenv PARMIN  $banktrade/BBL/CCARD/CC1FC105.txt
+gcsort take $PARMIN
+setenv JOBSTATUS $status
+if ($JOBSTATUS <<>> 0) then
+  echo "ERROR STEP10 - SORT BLFACSB"
+  goto ERROR
+endif
+
+echo ===========================================================================
+echo STEP11 - BACKUP BLFACOUT INTO SEQUENTIAL FILE
+echo ===========================================================================
+#setenv INFILE   $banktrade/BBL/FILE/TF_TF_BLFACOUT
+#setenv OUTFILE  $banktrade/BBL/FILE/TF_TF_D"$SDATE"_FAC_BLFACOUT.AFT321.txt
+#setenv PARMIN   $banktrade/BBL/CCARD/CC1FC001.txt
+#gcsort take $PARMIN
+setenv LCOUTS  $banktrade/BBL/FILE/TF_TF_D"$SDATE"_BKP_BLFACOUT.AFT321.txt
+runbw PT12440
+setenv JOBSTATUS $status
+if ($JOBSTATUS <<>> 0) then
+  echo "ERROR STEP11 - BACKUP BLFACOUT INTO SEQUENTIAL FILE"
+  goto ERROR
+endif
+
+unsetenv DATEYYMD
+unsetenv YY
+unsetenv MM
+unsetenv DD
+unsetenv SDATE
+unsetenv PY
+unsetenv PM
+unsetenv PD
+unsetenv PDATE
+unsetenv INFILE
+unsetenv INFILE1
+unsetenv INFILE2
+unsetenv INFILE3
+unsetenv OUTFILE
+unsetenv PARMIN
+unsetenv BTDATE
+unsetenv GLGX
+unsetenv BLBFT0
+unsetenv BLTRNT1
+unsetenv GENERR
+unsetenv PRINT01
+unsetenv SUBBK
+unsetenv BLFACBF
+unsetenv BLFACSB
+unsetenv LCOUTS
+#unsetenv BLFACOUT
+#unsetenv FACVS
+
+#****** END OF JOB P5901FC1.job *******
+
+goto ENDJOB
+
+ENDJOB:
+exit 0
+
+ERROR:
+unsetenv DATEYYMD
+unsetenv YY
+unsetenv MM
+unsetenv DD
+unsetenv SDATE
+unsetenv PY
+unsetenv PM
+unsetenv PD
+unsetenv PDATE
+unsetenv INFILE
+unsetenv INFILE1
+unsetenv INFILE2
+unsetenv INFILE3
+unsetenv OUTFILE
+unsetenv PARMIN
+unsetenv BTDATE
+unsetenv GLGX
+unsetenv BLBFT0
+unsetenv BLTRNT1
+unsetenv GENERR
+unsetenv PRINT01
+unsetenv SUBBK
+unsetenv BLFACBF
+unsetenv BLFACSB
+unsetenv LCOUTS
+#unsetenv BLFACOUT
+#unsetenv FACVS
+#setenv PPID `ps -ef | awk -v pid="$$" '{if ($2 == pid) {print $3}}'`
+#kill $PPID
+
+echo "JOBSTATUS-"$JOBSTATUS
+exit $JOBSTATUS
